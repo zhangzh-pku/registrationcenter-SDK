@@ -1,0 +1,15 @@
+Metadata-Version: 2.1
+Name: registry
+Version: 1.0.0
+Summary: This is the SDK for the registry of models, datasets and workflows.
+Home-page: UNKNOWN
+Author: DP Technology
+License: LGPLv3
+Platform: UNKNOWN
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+
+# registry-SDK
+
+This is the SDK for the registry of models, datasets and workflows.
+

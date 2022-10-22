@@ -1,8 +1,12 @@
 import json
 import os
+from typing import Dict, Union
 
 import oss2
 import requests
+
+from .artifacts import (GitArtifact, HTTPArtifact, LocalArtifact, OSSArtifact,
+                        S3Artifact)
 
 
 class Model:
@@ -14,15 +18,42 @@ class Model:
                  description: str = None,
                  readme: str = None,
                  author: str = None,
-                 labels: dict = None,
+                 labels: Dict[str, str] = None,
                  status: str = None,
                  size: int = None,
-                 location: dict = None,
-                 code: dict = None,
-                 source_path: str = None,
-                 parameters_path: str = None,
-                 spec_path: str = None,
-                 resources_path: str = None) -> None:
+                 location: Union[HTTPArtifact, LocalArtifact,
+                                 S3Artifact, OSSArtifact] = None,
+                 code: GitArtifact = None,
+                 source: Dict[str, Union[HTTPArtifact, LocalArtifact,
+                                         S3Artifact, OSSArtifact,
+                                         "Dataset"]] = None,
+                 parameters: Union[dict, LocalArtifact] = None,
+                 spec: Union[dict, LocalArtifact] = None,
+                 resources: Dict[str, Union[HTTPArtifact, LocalArtifact,
+                                            S3Artifact, OSSArtifact,
+                                            "Dataset"]] = None,
+                 **kwargs,
+                 ) -> None:
+        """
+        Model
+
+        Args:
+            namespace: namespace
+            name: name
+            version: version
+            description: short description
+            readme: long description
+            author: author
+            labels: labels
+            status: status
+            size: artifact size
+            location: storage location, either locally or remotely
+            code: source code used for generating the model
+            source: artifacts used for generating the model
+            parameters: parameters used for generating the model
+            spec: specification of the model
+            resources: related artifacts of the model
+        """
         self.namespace = namespace
         self.name = name
         self.description = description
@@ -34,10 +65,10 @@ class Model:
         self.size = size
         self.location = location
         self.code = code
-        self.source_path = source_path
-        self.parameters_path = parameters_path
-        self.spec_path = spec_path
-        self.resource_path = resources_path
+        self.source = source
+        self.parameters = parameters
+        self.spec = spec
+        self.resources = resources
 
     # 默认只保存路径到注册中心，oss为True时上传source、parameters、spec、resource到oss平台
     # 如果要上传到oss，那么必须要在系统环境变量中配置相关环境变量
@@ -63,7 +94,7 @@ class Model:
         self.id = data.get("id", "")
         if oss_flag:
             bucket = get_bucket()
-            #path = [p for p in d if "_path" in p and p is not None]
+            # path = [p for p in d if "_path" in p and p is not None]
             prefix = "registryCentre/model/"
             pre_path = prefix + self.namespace + "/" + self.name + "_" + self.version + "/"
             if self.source_path != None:
@@ -80,7 +111,7 @@ class Model:
                 oss2.resumable_upload(bucket, src_path, self.parameters_path)
 
 
-class Data:
+class Dataset:
 
     def __init__(self,
                  namespace: str,
@@ -135,7 +166,7 @@ class Data:
         self.id = data.get("id", "")
         if oss_flag:
             bucket = get_bucket()
-            #path = [p for p in d if "_path" in p and p is not None]
+            # path = [p for p in d if "_path" in p and p is not None]
             prefix = "registryCentre/data/"
             pre_path = prefix + self.namespace + "/" + self.name + "_" + self.version + "/"
             if self.source_path != None:
@@ -152,7 +183,7 @@ class Data:
                 oss2.resumable_upload(bucket, src_path, self.parameters_path)
 
 
-class workflow:
+class Workflow:
 
     def __init__(self,
                  namespace: str,
@@ -312,11 +343,11 @@ def get_model(namespace: str,
     return res
 
 
-def get_data(namespace: str,
-             name: str = None,
-             version: str = None,
-             domain: str = "http://127.0.0.1:8080",
-             down_load: bool = False) -> list:
+def get_dataset(namespace: str,
+                name: str = None,
+                version: str = None,
+                domain: str = "http://127.0.0.1:8080",
+                down_load: bool = False) -> list:
     url = domain + "/api/v1/data"
     d = {"namespace": namespace, "name": name, "version": version}
     r = requests.get(url=url, params=d)
@@ -422,7 +453,7 @@ m = Model("test_namespace_v1.1",
           "v1.0.5",
           parameters_path="input.json")
 
-#m.insert(oss_flag=True)
+# m.insert(oss_flag=True)
 
 r = get_model("test_namespace_v1.1",
               "test_name_v1.1",
