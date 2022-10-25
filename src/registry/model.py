@@ -117,7 +117,12 @@ class Model:
                 if value is None:
                     kwargs[key] = None
                 else:
-                    kwargs[key] = {k: Artifact.from_dict(v) for k, v in value.items()}
+                    kwargs[key] = {}
+                    for k, v in value.items():
+                        if "dataset" in v:
+                            kwargs[key][k] = Dataset.query(id=v["dataset"]["id"])
+                        else:
+                            kwargs[key][k] = Artifact.from_dict(v)
             else:
                 kwargs[key] = value
         return cls(**kwargs)
@@ -167,7 +172,8 @@ class Model:
               name: str = None,
               version: str = None,
               domain: str = "http://127.0.0.1:8080",
-              down_load: bool = False) -> list:
+              down_load: bool = False,
+              id: int = None) -> list:
         url = domain + "/api/v1/model"
         d = {"namespace": namespace, "name": name, "version": version}
         r = requests.get(url=url, params=d)
@@ -295,7 +301,14 @@ class Dataset:
                 if value is None:
                     kwargs[key] = None
                 else:
-                    kwargs[key] = {k: Artifact.from_dict(v) for k, v in value.items()}
+                    kwargs[key] = {}
+                    for k, v in value.items():
+                        if "model" in v:
+                            kwargs[key][k] = Model.query(id=v["model"]["id"])
+                        elif "dataset" in v:
+                            kwargs[key][k] = Dataset.query(id=v["dataset"]["id"])
+                        else:
+                            kwargs[key][k] = Artifact.from_dict(v)
             else:
                 kwargs[key] = value
         return cls(**kwargs)
@@ -339,7 +352,8 @@ class Dataset:
               name: str = None,
               version: str = None,
               domain: str = "http://127.0.0.1:8080",
-              down_load: bool = False) -> list:
+              down_load: bool = False,
+              id: int = None) -> list:
         url = domain + "/api/v1/data"
         d = {"namespace": namespace, "name": name, "version": version}
         r = requests.get(url=url, params=d)
