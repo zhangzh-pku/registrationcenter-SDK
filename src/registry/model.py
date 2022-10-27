@@ -8,6 +8,8 @@ import requests
 from .artifacts import (Artifact, GitArtifact, HTTPArtifact, LocalPath,
                         OSSArtifact, S3Artifact)
 
+test_domain = "http://registration-center.test.dp.tech"
+
 
 class Model:
 
@@ -21,6 +23,7 @@ class Model:
                  labels: Dict[str, str] = None,
                  status: str = None,
                  size: int = None,
+                 id: str = None,
                  location: Union[HTTPArtifact, LocalPath,
                                  S3Artifact, OSSArtifact] = None,
                  code: GitArtifact = None,
@@ -69,6 +72,7 @@ class Model:
         self.parameters = parameters
         self.spec = spec
         self.resources = resources
+        self.id = id
 
     def __repr__(self):
         return "<Model %s/%s:%s>" % (self.namespace, self.name, self.version)
@@ -109,12 +113,13 @@ class Model:
         kwargs = {}
         for key, value in d.items():
             if key in ["location", "code"]:
-                if value is None:
+                if value is None or value == "null" or value == "":
                     kwargs[key] = None
                 else:
+                    value = json.loads(value)
                     kwargs[key] = Artifact.from_dict(value)
             elif key in ["source", "resources"]:
-                if value is None:
+                if value is None or value == "null" or value == "":
                     kwargs[key] = None
                 else:
                     kwargs[key] = {}
@@ -127,12 +132,11 @@ class Model:
                 kwargs[key] = value
         return cls(**kwargs)
 
-
     # 默认只保存路径到注册中心，oss为True时上传source、parameters、spec、resource到oss平台
     # 如果要上传到oss，那么必须要在系统环境变量中配置相关环境变量
     # 具体细节见使用文档
     def insert(self,
-               domain: str = "http://127.0.0.1:8080",
+               domain: str = test_domain,
                oss_flag: bool = False):
         url = domain + "/api/v1/model"
         body = self.to_dict()
@@ -153,35 +157,37 @@ class Model:
             # path = [p for p in d if "_path" in p and p is not None]
             prefix = "registryCentre/model/"
             pre_path = prefix + self.namespace + "/" + self.name + "_" + self.version + "/"
-            if self.source_path != None:
+            if self.source_path is not None:
                 src_path = pre_path + self.source_path
                 oss2.resumable_upload(bucket, src_path, self.source_path)
-            if self.spec_path != None:
+            if self.spec_path is not None:
                 src_path = pre_path + self.spec_path
                 oss2.resumable_upload(bucket, src_path, self.spec_path)
-            if self.resource_path != None:
+            if self.resource_path is not None:
                 src_path = pre_path + self.resource_path
                 oss2.resumable_upload(bucket, src_path, self.resource_path)
-            if self.parameters_path != None:
+            if self.parameters_path is not None:
                 src_path = pre_path + self.parameters_path
                 oss2.resumable_upload(bucket, src_path, self.parameters_path)
 
     @classmethod
     def query(cls,
-              namespace: str,
+              namespace: str = None,
               name: str = None,
               version: str = None,
-              domain: str = "http://127.0.0.1:8080",
+              domain: str = test_domain,
               down_load: bool = False,
-              id: int = None) -> list:
+              id: str = None) -> list:
         url = domain + "/api/v1/model"
-        d = {"namespace": namespace, "name": name, "version": version}
+        d = {"namespace": namespace, "name": name, "version": version, "id": id}
         r = requests.get(url=url, params=d)
         if r.status_code < 200 or r.status_code >= 300:
             print("got unexcept http status:", r.status_code)
             return
         d = r.json()
         lis = d.get("data", {}).get("models", [])
+        if lis is None:
+            return []
         res = []
         for mod in lis:
             m = cls.from_dict(mod)
@@ -191,19 +197,19 @@ class Model:
             prefix = "registryCentre/model/"
             for mod in res:
                 pre_path = prefix + mod.namespace + "/" + mod.name + "_" + mod.version + "/"
-                if mod.source_path != None and mod.source_path != "":
+                if mod.source_path is not None and mod.source_path != "":
                     src_path = pre_path + mod.source_path
                     oss2.resumable_download(bucket, src_path,
                                             mod.source_path + "_download")
-                if mod.spec_path != None and mod.spec_path != "":
+                if mod.spec_path is not None and mod.spec_path != "":
                     src_path = pre_path + mod.spec_path
                     oss2.resumable_download(bucket, src_path,
                                             mod.spec_path + "_download")
-                if mod.resource_path != None and mod.resource_path != "":
+                if mod.resource_path is not None and mod.resource_path != "":
                     src_path = pre_path + mod.resource_path
                     oss2.resumable_download(bucket, src_path,
                                             mod.resource_path + "_download")
-                if mod.parameters_path != None and mod.parameters_path != "":
+                if mod.parameters_path is not None and mod.parameters_path != "":
                     src_path = pre_path + mod.parameters_path
                     oss2.resumable_download(bucket, src_path,
                                             mod.parameters_path + "_download")
@@ -223,6 +229,7 @@ class Dataset:
                  labels: Dict[str, str] = None,
                  status: str = None,
                  size: int = None,
+                 id: str = None,
                  location: Union[HTTPArtifact, LocalPath,
                                  S3Artifact, OSSArtifact] = None,
                  code: GitArtifact = None,
@@ -251,6 +258,7 @@ class Dataset:
         self.parameters = parameters
         self.spec = spec
         self.resources = resources
+        self.id = id
 
     def __repr__(self):
         return "<Dataset %s/%s:%s>" % (self.namespace, self.name, self.version)
@@ -293,12 +301,13 @@ class Dataset:
         kwargs = {}
         for key, value in d.items():
             if key in ["location", "code"]:
-                if value is None:
+                if value is None or value == "" or value == "null":
                     kwargs[key] = None
                 else:
+                    value = json.loads(value)
                     kwargs[key] = Artifact.from_dict(value)
             elif key in ["source", "resources"]:
-                if value is None:
+                if value is None or value == "" or value == "null":
                     kwargs[key] = None
                 else:
                     kwargs[key] = {}
@@ -314,7 +323,7 @@ class Dataset:
         return cls(**kwargs)
 
     def insert(self,
-               domain: str = "http://127.0.0.1:8080",
+               domain: str = test_domain,
                oss_flag: bool = False):
         url = domain + "/api/v1/data"
         body = self.to_dict()
@@ -333,29 +342,29 @@ class Dataset:
             # path = [p for p in d if "_path" in p and p is not None]
             prefix = "registryCentre/data/"
             pre_path = prefix + self.namespace + "/" + self.name + "_" + self.version + "/"
-            if self.source_path != None:
+            if self.source_path is not None:
                 src_path = pre_path + self.source_path
                 oss2.resumable_upload(bucket, src_path, self.source_path)
-            if self.spec_path != None:
+            if self.spec_path is not None:
                 src_path = pre_path + self.spec_path
                 oss2.resumable_upload(bucket, src_path, self.spec_path)
-            if self.resource_path != None:
+            if self.resource_path is not None:
                 src_path = pre_path + self.resource_path
                 oss2.resumable_upload(bucket, src_path, self.resource_path)
-            if self.parameters_path != None:
+            if self.parameters_path is not None:
                 src_path = pre_path + self.parameters_path
                 oss2.resumable_upload(bucket, src_path, self.parameters_path)
 
     @classmethod
     def query(cls,
-              namespace: str,
+              namespace: str = None,
               name: str = None,
               version: str = None,
-              domain: str = "http://127.0.0.1:8080",
+              domain: str = test_domain,
               down_load: bool = False,
               id: int = None) -> list:
         url = domain + "/api/v1/data"
-        d = {"namespace": namespace, "name": name, "version": version}
+        d = {"namespace": namespace, "name": name, "version": version, "id": id}
         r = requests.get(url=url, params=d)
         if r.status_code < 200 or r.status_code >= 300:
             print("got unexcept http status:", r.status_code)
@@ -371,19 +380,19 @@ class Dataset:
             prefix = "registryCentre/data/"
             for data in res:
                 pre_path = prefix + data.namespace + "/" + data.name + "_" + data.version + "/"
-                if data.source_path != None and data.source_path != "":
+                if data.source_path is not None and data.source_path != "":
                     src_path = pre_path + data.source_path
                     oss2.resumable_download(bucket, src_path,
                                             data.source_path + "_download")
-                if data.spec_path != None and data.spec_path != "":
+                if data.spec_path is not None and data.spec_path != "":
                     src_path = pre_path + data.spec_path
                     oss2.resumable_download(bucket, src_path,
                                             data.src_path + "_download")
-                if data.resource_path != None and data.resource_path != "":
+                if data.resource_path is not None and data.resource_path != "":
                     src_path = pre_path + data.resource_path
                     oss2.resumable_download(bucket, src_path,
                                             data.resource_path + "_download")
-                if data.parameters_path != None and data.parameters_path != "":
+                if data.parameters_path is not None and data.parameters_path != "":
                     src_path = pre_path + data.parameters_path
                     oss2.resumable_download(bucket, src_path,
                                             data.parameters_path + "_download")
@@ -403,7 +412,8 @@ class Workflow:
                  status: str = None,
                  code: dict = None,
                  python_package: str = None,
-                 docker_image: str = None) -> None:
+                 docker_image: str = None,
+                 id: str = None) -> None:
         self.namespace = namespace
         self.name = name
         self.description = description
@@ -415,9 +425,10 @@ class Workflow:
         self.code = code
         self.python_package = python_package
         self.docker_image = docker_image
+        self.id = id
 
     def insert(self,
-               domain: str = "http://127.0.0.1:8080",
+               domain: str = test_domain,
                oss_flag: bool = False):
         url = domain + "/api/v1/workflow"
         d = self.__dict__
@@ -438,12 +449,13 @@ class Workflow:
 
     @classmethod
     def query(cls,
-              namespace: str,
+              namespace: str = None,
               name: str = None,
               version: str = None,
-              domain: str = "http://127.0.0.1:8080") -> list:
+              domain: str = test_domain,
+              id: str = None) -> list:
         url = domain + "/api/v1/workflow"
-        d = {"namespace": namespace, "name": name, "version": version}
+        d = {"namespace": namespace, "name": name, "version": version, "id": id}
         r = requests.get(url=url, params=d)
         if r.status_code < 200 or r.status_code >= 300:
             print("got unexcept http status:", r.status_code)
@@ -481,7 +493,8 @@ class OP:
                  docker_image: str = None,
                  inputs: dict = None,
                  outputs: dict = None,
-                 execute: dict = None) -> None:
+                 execute: dict = None,
+                 id: str = None) -> None:
         self.namespace = namespace
         self.name = name
         self.description = description
@@ -496,9 +509,10 @@ class OP:
         self.inputs = inputs
         self.outputs = outputs
         self.execute = execute
+        self.id = id
 
     def insert(self,
-               domain: str = "http://127.0.0.1:8080",
+               domain: str = test_domain,
                oss_flag: bool = False):
         url = domain + "/api/v1/OP"
         d = self.__dict__
@@ -519,12 +533,13 @@ class OP:
 
     @classmethod
     def query(cls,
-              namespace: str,
+              namespace: str = None,
               name: str = None,
               version: str = None,
-              domain: str = "http://127.0.0.1:8080") -> list:
+              domain: str = test_domain,
+              id: str = None) -> list:
         url = domain + "/api/v1/OP"
-        d = {"namespace": namespace, "name": name, "version": version}
+        d = {"namespace": namespace, "name": name, "version": version, "id": id}
         r = requests.get(url=url, params=d)
         if r.status_code < 200 or r.status_code >= 300:
             print("got unexcept http status:", r.status_code)
@@ -553,20 +568,3 @@ def get_bucket() -> oss2.Bucket:
     oss_bucket_name = os.getenv("oss_bucket_name")
     oss_end_point = os.getenv("oss_end_point")
     return oss2.Bucket(auth, oss_end_point, oss_bucket_name)
-
-
-'''
-# use like this
-m = Model("test_namespace_v1.1",
-          "test_name_v1.1",
-          "v1.0.5",
-          parameters_path="input.json")
-
-# m.insert(oss_flag=True)
-
-r = get_model("test_namespace_v1.1",
-              "test_name_v1.1",
-              "v1.0.5",
-              down_load=True)
-print(r[0].id)
-'''
