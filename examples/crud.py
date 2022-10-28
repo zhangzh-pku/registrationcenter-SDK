@@ -1,6 +1,5 @@
 import os
 import sys
-from xml import dom
 
 path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, path)
@@ -92,84 +91,77 @@ def wf_query_namespace():
 
 
 def model_query_latest():
-    res_list = Model.query(domain=localhost,
-                           namespace="test_namespace_v1",
-                           version="latest")
+    res_list = Model.query(namespace="test_namespace_v1", version="latest")
     for res in res_list:
-        print(f"{res.namespace}/{res.name}:{res.version} id:{res.id}")
+        print(f"model:{res.namespace}/{res.name}:{res.version} id:{res.id}")
 
 
 def data_query_latest():
-    res_list = Dataset.query(domain=localhost,
-                             namespace="test_namespace_v1",
-                             version="latest")
+    res_list = Dataset.query(namespace="test_namespace_v1", version="latest")
     for res in res_list:
-        print(f"{res.namespace}/{res.name}:{res.version} id:{res.id}")
+        print(f"data:{res.namespace}/{res.name}:{res.version} id:{res.id}")
 
 
 def op_query_latest():
-    res_list = OP.query(domain=localhost,
-                        namespace="test_namespace_v1",
-                        version="latest")
+    res_list = OP.query(namespace="test_namespace_v1", version="latest")
     for res in res_list:
-        print(f"{res.namespace}/{res.name}:{res.version} id:{res.id}")
+        print(f"op:{res.namespace}/{res.name}:{res.version} id:{res.id}")
 
 
 def wf_query_latest():
-    res_list = Workflow.query(domain=localhost,
-                              namespace="test_namespace_v1",
-                              version="latest")
+    res_list = Workflow.query(namespace="test_namespace_v1", version="latest")
     for res in res_list:
-        print(f"{res.namespace}/{res.name}:{res.version} id:{res.id}")
+        print(f"workflow:{res.namespace}/{res.name}:{res.version} id:{res.id}")
 
 
 def model_insert_list_name_version():
-    for i in range(10):
-        for j in range(10):
-            version = "v1.0.1." + str(i)
+    for i in range(3):
+        for j in range(3):
+            version = "v1.0.0." + str(i)
             m = Model(namespace="test_namespace_v1",
                       name="test_name_" + str(j),
                       version=version,
                       location=tem)
             m.insert()
             res = Model.query(id=m.id)[0]
-            print(f"{res.namespace}/{res.name}:{res.version} id:{res.id}")
+            print(
+                f"model:{res.namespace}/{res.name}:{res.version} id:{res.id}")
 
 
 def data_insert_list_name_version():
-    for i in range(10):
-        for j in range(10):
-            version = "v1.0.1." + str(i)
+    for i in range(3):
+        for j in range(3):
+            version = "v1.0.0." + str(i)
             m = Dataset(namespace="test_namespace_v1",
                         name="test_name_" + str(j),
                         version=version,
                         location=tem)
             m.insert()
             res = Dataset.query(id=m.id)[0]
-            print(f"{res.namespace}/{res.name}:{res.version} id:{res.id}")
+            print(f"data:{res.namespace}/{res.name}:{res.version} id:{res.id}")
 
 
 def wf_insert_list_name_version():
-    for i in range(10):
-        for j in range(10):
-            version = "v1.0.1." + str(i)
+    for i in range(3):
+        for j in range(3):
+            version = "v1.0.0." + str(i)
             m = Workflow(namespace="test_namespace_v1",
                          name="test_name_" + str(j),
                          version=version)
             m.insert()
             res = Workflow.query(id=m.id)[0]
-            print(f"{res.namespace}/{res.name}:{res.version} id:{res.id}")
+            print(
+                f"workflow:{res.namespace}/{res.name}:{res.version} id:{res.id}"
+            )
 
 
 def op_insert_list_name_version():
-    for i in range(10):
-        for j in range(10):
-            version = "v1.0.1." + str(i)
+    for i in range(3):
+        for j in range(3):
+            version = "v1.0.0." + str(i)
             m = OP(namespace="test_namespace_v1",
                    name="test_name_" + str(j),
                    version=version)
             m.insert()
             res = OP.query(id=m.id)[0]
-            print(f"{res.namespace}/{res.name}:{res.version} id:{res.id}")
-
-op_query_latest()
+            print(f"op{res.namespace}/{res.name}:{res.version} id:{res.id}")
