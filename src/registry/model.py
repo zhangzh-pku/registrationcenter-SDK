@@ -1,12 +1,11 @@
 import json
-import os
 from typing import Dict, Union
 
-import oss2
+import dflow
 import requests
+from dflow import upload_s3, S3Artifact
 
-from .artifacts import (Artifact, GitArtifact, HTTPArtifact, LocalPath,
-                        OSSArtifact, S3Artifact)
+from .artifacts import (Artifact, GitArtifact, HTTPArtifact, LocalPath)
 
 test_domain = "http://registration-center.test.dp.tech"
 
@@ -25,16 +24,14 @@ class Model:
                  size: int = None,
                  id: str = None,
                  location: Union[HTTPArtifact, LocalPath,
-                                 S3Artifact, OSSArtifact] = None,
+                                 S3Artifact] = None,
                  code: GitArtifact = None,
                  source: Dict[str, Union[HTTPArtifact, LocalPath,
-                                         S3Artifact, OSSArtifact,
-                                         "Dataset"]] = None,
+                                         S3Artifact, "Dataset"]] = None,
                  parameters: Union[dict, LocalPath] = None,
                  spec: Union[dict, LocalPath] = None,
                  resources: Dict[str, Union[HTTPArtifact, LocalPath,
-                                            S3Artifact, OSSArtifact,
-                                            "Dataset"]] = None,
+                                            S3Artifact, "Dataset"]] = None,
                  **kwargs,
                  ) -> None:
         """
@@ -132,12 +129,9 @@ class Model:
                 kwargs[key] = value
         return cls(**kwargs)
 
-    # 默认只保存路径到注册中心，oss为True时上传source、parameters、spec、resource到oss平台
-    # 如果要上传到oss，那么必须要在系统环境变量中配置相关环境变量
-    # 具体细节见使用文档
     def insert(self,
                domain: str = test_domain,
-               oss_flag: bool = False):
+               upload: bool = False):
         url = domain + "/api/v1/model"
         body = self.to_dict()
         if body["location"] is None:
@@ -152,23 +146,12 @@ class Model:
             return
         data = body.get("data", {})
         self.id = data.get("id", "")
-        if oss_flag:
-            bucket = get_bucket()
-            # path = [p for p in d if "_path" in p and p is not None]
-            prefix = "registryCentre/model/"
-            pre_path = prefix + self.namespace + "/" + self.name + "_" + self.version + "/"
-            if self.source_path is not None:
-                src_path = pre_path + self.source_path
-                oss2.resumable_upload(bucket, src_path, self.source_path)
-            if self.spec_path is not None:
-                src_path = pre_path + self.spec_path
-                oss2.resumable_upload(bucket, src_path, self.spec_path)
-            if self.resource_path is not None:
-                src_path = pre_path + self.resource_path
-                oss2.resumable_upload(bucket, src_path, self.resource_path)
-            if self.parameters_path is not None:
-                src_path = pre_path + self.parameters_path
-                oss2.resumable_upload(bucket, src_path, self.parameters_path)
+        if upload:
+            d = self.__dict__
+            for k in d:
+                if isinstance(d[k], LocalPath):
+                    key = upload_s3(d[k].path)
+                    self.__setattr__(k, S3Artifact(key=key))
 
     @classmethod
     def query(cls,
@@ -176,7 +159,6 @@ class Model:
               name: str = None,
               version: str = None,
               domain: str = test_domain,
-              down_load: bool = False,
               id: str = None) -> list:
         url = domain + "/api/v1/model"
         d = {"namespace": namespace, "name": name, "version": version, "id": id}
@@ -192,28 +174,6 @@ class Model:
         for mod in lis:
             m = cls.from_dict(mod)
             res.append(m)
-        if down_load:
-            bucket = get_bucket()
-            prefix = "registryCentre/model/"
-            for mod in res:
-                pre_path = prefix + mod.namespace + "/" + mod.name + "_" + mod.version + "/"
-                if mod.source_path is not None and mod.source_path != "":
-                    src_path = pre_path + mod.source_path
-                    oss2.resumable_download(bucket, src_path,
-                                            mod.source_path + "_download")
-                if mod.spec_path is not None and mod.spec_path != "":
-                    src_path = pre_path + mod.spec_path
-                    oss2.resumable_download(bucket, src_path,
-                                            mod.spec_path + "_download")
-                if mod.resource_path is not None and mod.resource_path != "":
-                    src_path = pre_path + mod.resource_path
-                    oss2.resumable_download(bucket, src_path,
-                                            mod.resource_path + "_download")
-                if mod.parameters_path is not None and mod.parameters_path != "":
-                    src_path = pre_path + mod.parameters_path
-                    oss2.resumable_download(bucket, src_path,
-                                            mod.parameters_path + "_download")
-
         return res
 
 
@@ -231,16 +191,14 @@ class Dataset:
                  size: int = None,
                  id: str = None,
                  location: Union[HTTPArtifact, LocalPath,
-                                 S3Artifact, OSSArtifact] = None,
+                                 S3Artifact] = None,
                  code: GitArtifact = None,
                  source: Dict[str, Union[HTTPArtifact, LocalPath,
-                                         S3Artifact, OSSArtifact,
-                                         Model, "Dataset"]] = None,
+                                         S3Artifact, Model, "Dataset"]] = None,
                  parameters: Union[dict, LocalPath] = None,
                  spec: Union[dict, LocalPath] = None,
                  resources: Dict[str, Union[HTTPArtifact, LocalPath,
-                                            S3Artifact, OSSArtifact,
-                                            Model, "Dataset"]] = None,
+                                            S3Artifact, Model, "Dataset"]] = None,
                  **kwargs,
                  ) -> None:
         self.namespace = namespace
@@ -286,6 +244,8 @@ class Dataset:
                             d2[k] = {"model": {"id": v.id}}
                         elif isinstance(v, Dataset):
                             d2[k] = {"dataset": {"id": v.id}}
+                        elif isinstance(v, dflow.S3Artifact):
+                            d2[k] = {"s3": v.to_dict()}
                         else:
                             raise TypeError("%s is not supported artifact"
                                             % type(v))
@@ -324,7 +284,7 @@ class Dataset:
 
     def insert(self,
                domain: str = test_domain,
-               oss_flag: bool = False):
+               upload: bool = False):
         url = domain + "/api/v1/data"
         body = self.to_dict()
         r = requests.post(url=url, data=json.dumps(body))
@@ -337,23 +297,12 @@ class Dataset:
             return
         data = body.get("data", {})
         self.id = data.get("id", "")
-        if oss_flag:
-            bucket = get_bucket()
-            # path = [p for p in d if "_path" in p and p is not None]
-            prefix = "registryCentre/data/"
-            pre_path = prefix + self.namespace + "/" + self.name + "_" + self.version + "/"
-            if self.source_path is not None:
-                src_path = pre_path + self.source_path
-                oss2.resumable_upload(bucket, src_path, self.source_path)
-            if self.spec_path is not None:
-                src_path = pre_path + self.spec_path
-                oss2.resumable_upload(bucket, src_path, self.spec_path)
-            if self.resource_path is not None:
-                src_path = pre_path + self.resource_path
-                oss2.resumable_upload(bucket, src_path, self.resource_path)
-            if self.parameters_path is not None:
-                src_path = pre_path + self.parameters_path
-                oss2.resumable_upload(bucket, src_path, self.parameters_path)
+        if upload:
+            d = self.__dict__
+            for k in d:
+                if isinstance(d[k], LocalPath):
+                    key = upload_s3(d[k].path)
+                    self.__setattr__(k, S3Artifact(key=key))
 
     @classmethod
     def query(cls,
@@ -375,27 +324,6 @@ class Dataset:
         for data in lis:
             d = cls.from_dict(data)
             res.append(d)
-        if down_load:
-            bucket = get_bucket()
-            prefix = "registryCentre/data/"
-            for data in res:
-                pre_path = prefix + data.namespace + "/" + data.name + "_" + data.version + "/"
-                if data.source_path is not None and data.source_path != "":
-                    src_path = pre_path + data.source_path
-                    oss2.resumable_download(bucket, src_path,
-                                            data.source_path + "_download")
-                if data.spec_path is not None and data.spec_path != "":
-                    src_path = pre_path + data.spec_path
-                    oss2.resumable_download(bucket, src_path,
-                                            data.src_path + "_download")
-                if data.resource_path is not None and data.resource_path != "":
-                    src_path = pre_path + data.resource_path
-                    oss2.resumable_download(bucket, src_path,
-                                            data.resource_path + "_download")
-                if data.parameters_path is not None and data.parameters_path != "":
-                    src_path = pre_path + data.parameters_path
-                    oss2.resumable_download(bucket, src_path,
-                                            data.parameters_path + "_download")
         return res
 
 
@@ -429,7 +357,7 @@ class Workflow:
 
     def insert(self,
                domain: str = test_domain,
-               oss_flag: bool = False):
+               upload: bool = False):
         url = domain + "/api/v1/workflow"
         d = self.__dict__
         body = {
@@ -446,6 +374,12 @@ class Workflow:
             return
         data = body.get("data", {})
         self.id = data.get("id", "")
+        if upload:
+            d = self.__dict__
+            for k in d:
+                if isinstance(d[k], LocalPath):
+                    key = upload_s3(d[k].path)
+                    self.__setattr__(k, S3Artifact(key=key))
 
     @classmethod
     def query(cls,
@@ -513,7 +447,7 @@ class OP:
 
     def insert(self,
                domain: str = test_domain,
-               oss_flag: bool = False):
+               upload: bool = False):
         url = domain + "/api/v1/OP"
         d = self.__dict__
         body = {
@@ -530,6 +464,12 @@ class OP:
             return
         data = body.get("data", {})
         self.id = data.get("id", "")
+        if upload:
+            d = self.__dict__
+            for k in d:
+                if isinstance(d[k], LocalPath):
+                    key = upload_s3(d[k].path)
+                    self.__setattr__(k, S3Artifact(key=key))
 
     @classmethod
     def query(cls,
@@ -559,12 +499,3 @@ class OP:
                 o.__setattr__(k, op[k])
             res.append(o)
         return res
-
-
-def get_bucket() -> oss2.Bucket:
-    oss_access_key_id = os.getenv("oss_access_key_id")
-    oss_access_key_secret = os.getenv("oss_access_key_secret")
-    auth = oss2.Auth(oss_access_key_id, oss_access_key_secret)
-    oss_bucket_name = os.getenv("oss_bucket_name")
-    oss_end_point = os.getenv("oss_end_point")
-    return oss2.Bucket(auth, oss_end_point, oss_bucket_name)

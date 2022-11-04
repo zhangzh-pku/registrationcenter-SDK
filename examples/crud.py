@@ -165,3 +165,5 @@ def op_insert_list_name_version():
             m.insert()
             res = OP.query(id=m.id)[0]
             print(f"op{res.namespace}/{res.name}:{res.version} id:{res.id}")
+
+
