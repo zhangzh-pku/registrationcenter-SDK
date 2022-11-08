@@ -1,5 +1,5 @@
 import json
-from typing import Dict, Union
+from typing import Dict, Union, List
 
 import dflow
 import requests
@@ -23,8 +23,9 @@ class Model:
                  status: str = None,
                  size: int = None,
                  id: str = None,
-                 location: Union[HTTPArtifact, LocalPath,
-                                 S3Artifact] = None,
+                 location: Union[HTTPArtifact, LocalPath, S3Artifact,
+                                 Dict[str, Union[LocalPath, S3Artifact, HTTPArtifact]],
+                                 List[Union[LocalPath, S3Artifact, HTTPArtifact]]] = None,
                  code: GitArtifact = None,
                  source: Dict[str, Union[HTTPArtifact, LocalPath,
                                          S3Artifact, "Dataset"]] = None,
@@ -82,6 +83,21 @@ class Model:
                     d[key] = None
                 elif isinstance(value, Artifact):
                     d[key] = value.to_dict()
+                elif isinstance(value, dflow.S3Artifact):
+                    d[key] = {"s3": value.to_dict()}
+                elif isinstance(value, dict):
+                    d2 = {}
+                    for k in value:
+                        # 这一定是注册之前的最后一步
+                        # 因此如果没有to_dict方法说明不是一个artifact
+                        # 那么应该是个不合理的使用方式
+                        d2[k] = {"s3": value[k].to_dict()}
+                    d[key] = {"s3_dict": json.dumps(d2)}
+                elif isinstance(value, list):
+                    lis = []
+                    for i in value:
+                        lis.append(i.to_dict())
+                    d[key] = {"s3_list": json.dumps(lis)}
                 else:
                     raise TypeError("%s is not supported artifact"
                                     % type(value))
@@ -95,6 +111,8 @@ class Model:
                             d2[k] = v.to_dict()
                         elif isinstance(v, Dataset):
                             d2[k] = {"dataset": {"id": v.id}}
+                        elif isinstance(v, dflow.S3Artifact):
+                            d2[k] = {"s3": v.to_dict()}
                         else:
                             raise TypeError("%s is not supported artifact"
                                             % type(v))
@@ -130,8 +148,32 @@ class Model:
         return cls(**kwargs)
 
     def insert(self,
-               domain: str = test_domain,
-               upload: bool = False):
+               domain: str = test_domain):
+        d = self.__dict__
+        for k in d:
+            if k == "location":
+                if isinstance(d[k], dict):
+                    path_d = d[k]
+                    res = {}
+                    for path in path_d:
+                        if isinstance(path_d[path], LocalPath):
+                            key = upload_s3(path_d[path].path)
+                            res[path] = S3Artifact.from_dict({"key": key})
+                        elif isinstance(path_d[path], [S3Artifact, HTTPArtifact]):
+                            res[path] = path_d[path]
+                        else:
+                            raise ValueError("unexcept type in location %s" % self)
+                    self.__setattr__(k, res)
+                elif isinstance(d[k], list):
+                    res = []
+                    for i in d[k]:
+                        if isinstance(i, LocalPath):
+                            key = upload_s3(i.path)
+                            res.append(S3Artifact.from_dict({"key": key}))
+                    self.__setattr__(k, res)
+            if isinstance(d[k], LocalPath):
+                key = upload_s3(d[k].path)
+                self.__setattr__(k, S3Artifact.from_dict({"key": key}))
         url = domain + "/api/v1/model"
         body = self.to_dict()
         if body["location"] is None:
@@ -146,12 +188,6 @@ class Model:
             return
         data = body.get("data", {})
         self.id = data.get("id", "")
-        if upload:
-            d = self.__dict__
-            for k in d:
-                if isinstance(d[k], LocalPath):
-                    key = upload_s3(d[k].path)
-                    self.__setattr__(k, S3Artifact(key=key))
 
     @classmethod
     def query(cls,
@@ -190,8 +226,9 @@ class Dataset:
                  status: str = None,
                  size: int = None,
                  id: str = None,
-                 location: Union[HTTPArtifact, LocalPath,
-                                 S3Artifact] = None,
+                 location: Union[HTTPArtifact, LocalPath, S3Artifact,
+                                 Dict[str, Union[HTTPArtifact, LocalPath, S3Artifact]],
+                                 List[Union[HTTPArtifact, LocalPath, S3Artifact]]] = None,
                  code: GitArtifact = None,
                  source: Dict[str, Union[HTTPArtifact, LocalPath,
                                          S3Artifact, Model, "Dataset"]] = None,
@@ -229,6 +266,18 @@ class Dataset:
                     d[key] = None
                 elif isinstance(value, Artifact):
                     d[key] = value.to_dict()
+                elif isinstance(value, dflow.S3Artifact):
+                    d[key] = {"s3": value.to_dict()}
+                elif isinstance(value, dict):
+                    d2 = {}
+                    for k in value:
+                        d2[k] = {"s3": value[k].to_dict()}
+                    d[key] = {"s3_dict": json.dumps(d2)}
+                elif isinstance(value, list):
+                    lis = []
+                    for i in value:
+                        lis.append(i.to_dict())
+                    d[key] = {"s3_list": json.dumps(lis)}
                 else:
                     raise TypeError("%s is not supported artifact"
                                     % type(value))
@@ -283,10 +332,36 @@ class Dataset:
         return cls(**kwargs)
 
     def insert(self,
-               domain: str = test_domain,
-               upload: bool = False):
+               domain: str = test_domain):
         url = domain + "/api/v1/data"
+        d = self.__dict__
+        for k in d:
+            if k == "location":
+                if isinstance(d[k], dict):
+                    path_d = d[k]
+                    res = {}
+                    for path in path_d:
+                        if isinstance(path_d[path], LocalPath):
+                            key = upload_s3(path_d[path].path)
+                            res[path] = S3Artifact.from_dict({"key": key})
+                        elif isinstance(path_d[path], [S3Artifact]):
+                            res[path] = path_d[path]
+                        else:
+                            raise ValueError("unexcept type in location %s" % self)
+                    self.__setattr__(k, res)
+                elif isinstance(d[k], list):
+                    res = []
+                    for i in d[k]:
+                        if isinstance(i, LocalPath):
+                            key = upload_s3(i.path)
+                            res.append(S3Artifact.from_dict({"key": key}))
+                    self.__setattr__(k, res)
+            if isinstance(d[k], LocalPath):
+                key = upload_s3(d[k].path)
+                self.__setattr__(k, S3Artifact.from_dict({"key": key}))
         body = self.to_dict()
+        if body["location"] is None:
+            raise ValueError("Location of %s not provided" % self)
         r = requests.post(url=url, data=json.dumps(body))
         if r.status_code < 200 or r.status_code >= 300:
             print("got unexcept http status:", r.status_code)
@@ -297,12 +372,6 @@ class Dataset:
             return
         data = body.get("data", {})
         self.id = data.get("id", "")
-        if upload:
-            d = self.__dict__
-            for k in d:
-                if isinstance(d[k], LocalPath):
-                    key = upload_s3(d[k].path)
-                    self.__setattr__(k, S3Artifact(key=key))
 
     @classmethod
     def query(cls,
@@ -360,6 +429,10 @@ class Workflow:
                upload: bool = False):
         url = domain + "/api/v1/workflow"
         d = self.__dict__
+        for k in d:
+            if isinstance(d[k], LocalPath):
+                key = upload_s3(d[k].path)
+                self.__setattr__(k, dflow.S3Artifact.from_dict({"key": key}))
         body = {
             key: d[key]
             for key in d if "__" not in key and key is not None
@@ -374,12 +447,6 @@ class Workflow:
             return
         data = body.get("data", {})
         self.id = data.get("id", "")
-        if upload:
-            d = self.__dict__
-            for k in d:
-                if isinstance(d[k], LocalPath):
-                    key = upload_s3(d[k].path)
-                    self.__setattr__(k, S3Artifact(key=key))
 
     @classmethod
     def query(cls,

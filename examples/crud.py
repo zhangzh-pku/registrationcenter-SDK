@@ -4,18 +4,14 @@ import sys
 path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, path)
 
-from src.registry import Model, Dataset, OP, Workflow
-from src.registry.artifacts import OSSArtifact
+from src.registry import Model, Dataset, OP, Workflow, LocalPath
 
 access_key_id = os.getenv("oss_access_key_id")
 access_key_secret = os.getenv("oss_access_key_secret")
 bucket_name = os.getenv("oss_bucket_name")
 end_point = os.getenv("oss_end_point")
 
-tem = OSSArtifact(end_point,
-                  bucket_name,
-                  access_key_id,
-                  secret_key=access_key_secret)
+tem = LocalPath(path='junk.data')
 
 localhost = "http://127.0.0.1:8080"
 
@@ -165,5 +161,3 @@ def op_insert_list_name_version():
             m.insert()
             res = OP.query(id=m.id)[0]
             print(f"op{res.namespace}/{res.name}:{res.version} id:{res.id}")
-
-

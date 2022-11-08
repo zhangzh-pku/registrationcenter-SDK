@@ -1,3 +1,15 @@
 input.json
 
 .vscode/
+
+junk.data
+
+qsar-benchmark/
+
+upload.py
+
+__pycache__/
+
+lebesgue-*
+
+tiefblue/
