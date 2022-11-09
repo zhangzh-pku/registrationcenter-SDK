@@ -1,7 +1,8 @@
 import os
-from src.registry import Dataset
+
 from dflow import s3_config
-from dflow.plugins.bohrium import config, TiefblueClient
+from dflow.plugins.bohrium import TiefblueClient, config
+from registry import Dataset
 
 config["username"] = os.getenv("bohrium_user")
 config["password"] = os.getenv("bohrium_pswd")
